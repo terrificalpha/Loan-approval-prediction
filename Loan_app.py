@@ -10,13 +10,19 @@ from loan_model import (
     SELF_EMPLOYED,
     load_metrics,
     load_model,
+    load_ranges,
     predict,
+    repayment_warning,
 )
 
 
 @st.cache_resource
 def get_model():
     return load_model()
+
+
+def clamp(value, low, high):
+    return max(low, min(value, high))
 
 
 def show_about(metrics):
@@ -61,9 +67,20 @@ def main():
         st.code(str(exc))
         st.stop()
 
-    show_about(load_metrics())
+    metrics = load_metrics()
+    ranges = load_ranges(metrics)
+    show_about(metrics)
+
+    income_lo, income_hi = ranges["ApplicantIncome"]
+    amount_lo, amount_hi = ranges["LoanAmount"]
+    term_lo, term_hi = ranges["Loan_Amount_Term"]
 
     st.subheader("Applicant details")
+    st.caption(
+        "Numeric inputs are limited to the range found in the training data. "
+        "A random forest cannot extrapolate: anything beyond that range would "
+        "just be treated like the largest value it has seen."
+    )
     col1, col2 = st.columns(2)
 
     with col1:
@@ -75,13 +92,25 @@ def main():
 
     with col2:
         applicant_income = st.number_input(
-            "Applicant income (dataset units)", min_value=0, value=5000, step=500
+            f"Applicant income (dataset units, {income_lo:,} to {income_hi:,})",
+            min_value=income_lo,
+            max_value=income_hi,
+            value=clamp(5000, income_lo, income_hi),
+            step=500,
         )
         loan_amount = st.number_input(
-            "Loan amount (in thousands)", min_value=1, value=150, step=10
+            f"Loan amount (in thousands, {amount_lo:,} to {amount_hi:,})",
+            min_value=amount_lo,
+            max_value=amount_hi,
+            value=clamp(150, amount_lo, amount_hi),
+            step=10,
         )
         loan_term = st.number_input(
-            "Loan term (months)", min_value=1, max_value=480, value=360, step=12
+            f"Loan term (months, {term_lo} to {term_hi})",
+            min_value=term_lo,
+            max_value=term_hi,
+            value=clamp(360, term_lo, term_hi),
+            step=12,
         )
         credit_history = st.selectbox("Credit history", list(CREDIT_HISTORY), index=1)
         property_area = st.selectbox("Property area", list(PROPERTY_AREA))
@@ -114,6 +143,11 @@ def main():
         else:
             st.warning("The model predicts: Loan Not Approved.")
         st.metric("Model score for approval", f"{score:.0%}")
+
+        caution = repayment_warning(applicant_income, loan_amount, loan_term)
+        if caution:
+            st.warning(caution)
+
         st.caption(
             "The score comes from a small random forest and is not a calibrated "
             "probability. Credit history is the strongest signal in this dataset."
