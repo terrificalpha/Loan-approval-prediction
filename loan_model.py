@@ -6,6 +6,7 @@ Both the Streamlit app and train_model.py import from here so the training and
 prediction code can never drift apart.
 """
 import json
+import math
 import pickle
 from pathlib import Path
 
@@ -45,6 +46,15 @@ RAW_ENCODINGS = {
     "Education": EDUCATION,
     "Self_Employed": SELF_EMPLOYED,
     "Property_Area": PROPERTY_AREA,
+}
+
+
+# Input bounds used by the app when metrics.json has no "feature_ranges" yet.
+# train_model.py writes the exact min/max seen in your training data.
+FALLBACK_RANGES = {
+    "ApplicantIncome": (0, 81000),
+    "LoanAmount": (9, 700),
+    "Loan_Amount_Term": (12, 480),
 }
 
 
@@ -112,3 +122,37 @@ def predict(model, **form_values):
     label = int(model.predict(features)[0])
     score = float(model.predict_proba(features)[0][list(model.classes_).index(1)])
     return label, score
+
+
+def load_ranges(metrics=None):
+    """Min/max the model saw in training for the numeric inputs.
+
+    Tree models cannot extrapolate: every value beyond the training maximum is
+    treated exactly like the maximum. The app therefore limits the inputs to
+    these ranges instead of letting users type absurd values.
+    """
+    ranges = dict(FALLBACK_RANGES)
+    saved = (metrics or {}).get("feature_ranges", {})
+    for name in ranges:
+        if name in saved:
+            low, high = saved[name]
+            ranges[name] = (int(math.floor(low)), int(math.ceil(high)))
+    return ranges
+
+
+def repayment_warning(applicant_income, loan_amount, loan_term):
+    """Return a caution if the rough repayment exceeds income, else None.
+
+    LoanAmount is in thousands in this dataset. Assumes income is monthly and
+    ignores interest, so this is only a sanity check. The model itself never
+    sees a repayment-to-income ratio.
+    """
+    monthly = loan_amount * 1000 / loan_term
+    if monthly > applicant_income:
+        return (
+            f"Rough check: repaying {loan_amount:,} thousand over {loan_term} months "
+            f"is about {monthly:,.0f} per month before interest, more than the "
+            f"income entered (assuming income is monthly). This model does not "
+            f"check affordability, so treat the prediction with extra caution."
+        )
+    return None
