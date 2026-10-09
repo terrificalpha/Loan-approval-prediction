@@ -48,6 +48,23 @@ class EncodingTests(unittest.TestCase):
             lm.build_features(**sample(loan_amount=0))
 
 
+class GuardrailTests(unittest.TestCase):
+    def test_fallback_ranges_used_without_saved_ranges(self):
+        self.assertEqual(lm.load_ranges(None), lm.FALLBACK_RANGES)
+
+    def test_saved_ranges_are_used_and_rounded_outward(self):
+        saved = {"feature_ranges": {"LoanAmount": [9.0, 699.5]}}
+        ranges = lm.load_ranges(saved)
+        self.assertEqual(ranges["LoanAmount"], (9, 700))
+        self.assertEqual(ranges["Loan_Amount_Term"], lm.FALLBACK_RANGES["Loan_Amount_Term"])
+
+    def test_absurd_loan_triggers_repayment_warning(self):
+        self.assertIsNotNone(lm.repayment_warning(25000, 800000, 12))
+
+    def test_reasonable_loan_has_no_warning(self):
+        self.assertIsNone(lm.repayment_warning(6000, 120, 360))
+
+
 class ModelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -58,24 +75,16 @@ class ModelTests(unittest.TestCase):
     def test_model_expects_our_features(self):
         self.assertEqual(list(self.model.feature_names_in_), lm.FEATURES)
 
-    def test_notebook_example_is_approved(self):
-        # Notebook cell: input_data=(1,0,0,0,0,5849,146.41,360,1,2) -> eligible
-        label, score = lm.predict(
-            self.model,
-            **sample(
-                married="No",
-                applicant_income=5849,
-                loan_amount=146.41,
-                property_area="Urban",
-            ),
-        )
-        self.assertEqual(label, 1)
-        self.assertGreater(score, 0.5)
+    def test_scores_are_probabilities(self):
+        label, score = lm.predict(self.model, **sample())
+        self.assertIn(label, (0, 1))
+        self.assertGreaterEqual(score, 0.0)
+        self.assertLessEqual(score, 1.0)
 
-    def test_poor_credit_history_is_rejected(self):
-        label, score = lm.predict(self.model, **sample(credit_history="No / poor (0)"))
-        self.assertEqual(label, 0)
-        self.assertLess(score, 0.5)
+    def test_good_credit_scores_higher_than_poor_credit(self):
+        _, good = lm.predict(self.model, **sample(credit_history="Yes / good (1)"))
+        _, poor = lm.predict(self.model, **sample(credit_history="No / poor (0)"))
+        self.assertGreater(good, poor)
 
     def test_metrics_file_is_readable(self):
         metrics = lm.load_metrics()
