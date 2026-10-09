@@ -1,0 +1,6 @@
+# Pinned to the versions the model was trained and saved with (scikit-learn 1.5.1).
+# Use Python 3.11 or 3.12.
+streamlit>=1.35,<2
+scikit-learn==1.5.1
+numpy==1.26.4
+pandas==2.2.2

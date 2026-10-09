@@ -1,0 +1,5 @@
+# Extra packages only needed to run the notebook (install after requirements.txt)
+matplotlib
+seaborn
+imbalanced-learn
+jupyter

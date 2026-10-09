@@ -1,0 +1,7 @@
+{
+  "model": "RandomForest",
+  "evaluation": "Held-out test set (123 rows, stratified 80/20 split). Fill values learned on the training split only; no oversampling.",
+  "test_accuracy": 0.78,
+  "recall_not_approved": 0.395,
+  "recall_approved": 0.953
+}
