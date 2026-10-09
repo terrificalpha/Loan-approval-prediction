@@ -96,6 +96,10 @@ def main():
         "test_accuracy": round(float(accuracy_score(y_test, predictions)), 3),
         "recall_not_approved": round(float(recall_score(y_test, predictions, pos_label=0)), 3),
         "recall_approved": round(float(recall_score(y_test, predictions, pos_label=1)), 3),
+        "feature_ranges": {
+            column: [float(data[column].min()), float(data[column].max())]
+            for column in ("ApplicantIncome", "LoanAmount", "Loan_Amount_Term")
+        },
     }
     with open(MODEL_PATH, "wb") as model_file:
         pickle.dump(model, model_file)
